@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>BLEWeb Control Panel</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 2rem;
+    }
+    #status {
+      margin-top: 1rem;
+      font-size: 1.25rem;
+    }
+    #controls {
+      margin-top: 2rem;
+    }
+    button, input[type="color"] {
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+      margin-right: 1rem;
+    }
+    input[type="color"] {
+      width: 3rem;
+      height: 3rem;
+      border: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>BLEWeb Control Panel</h1>
+
+  <button id="connect">Connect to BLEWeb</button>
+  <div id="status">Not connected</div>
+
+  <div id="controls" hidden>
+    <div>
+      <strong>Button State:</strong>
+      <span id="buttonState">–</span>
+    </div>
+    <div style="margin-top:1rem;">
+      <strong>LED Color:</strong>
+      <input type="color" id="colorPicker" value="#000000" title="Pick LED color">
+      <span id="colorValue">#000000</span>
+    </div>
+  </div>
+
+  <script>
+    const SERVICE_UUID   = '1e03ce00-b8bc-4152-85e2-f096236d2833';
+    const BTN_CHAR_UUID  = '1e03ce02-b8bc-4152-85e2-f096236d2833';
+    const LED_CHAR_UUID  = '2a56f0a0-1234-4321-9abc-998877665544';
+
+    let buttonChar, ledChar;
+    const statusEl      = document.getElementById('status');
+    const controlsEl    = document.getElementById('controls');
+    const btnStateEl    = document.getElementById('buttonState');
+    const colorPicker   = document.getElementById('colorPicker');
+    const colorValueEl  = document.getElementById('colorValue');
+
+    document.getElementById('connect').addEventListener('click', async () => {
+      try {
+        statusEl.textContent = 'Requesting device…';
+        const device = await navigator.bluetooth.requestDevice({
+          filters: [{ services: [SERVICE_UUID] }]
+        });
+
+        statusEl.textContent = 'Connecting…';
+        const server  = await device.gatt.connect();
+        const service = await server.getPrimaryService(SERVICE_UUID);
+
+        buttonChar = await service.getCharacteristic(BTN_CHAR_UUID);
+        ledChar    = await service.getCharacteristic(LED_CHAR_UUID);
+
+        // subscribe to button notifications
+        await buttonChar.startNotifications();
+        buttonChar.addEventListener('characteristicvaluechanged', e => {
+          const v = e.target.value.getUint8(0);
+          btnStateEl.textContent = v === 1 ? 'PRESSED' : 'released';
+        });
+
+        // read initial button state
+        {
+          const iv = await buttonChar.readValue();
+          btnStateEl.textContent = iv.getUint8(0) === 1 ? 'PRESSED' : 'released';
+        }
+
+        // show controls
+        controlsEl.hidden = false;
+        statusEl.textContent = 'Connected';
+
+        // handle color picker changes
+        colorPicker.addEventListener('input', async () => {
+          const hex = colorPicker.value;
+          colorValueEl.textContent = hex;
+          // parse hex to r,g,b
+          const r = parseInt(hex.substr(1,2), 16);
+          const g = parseInt(hex.substr(3,2), 16);
+          const b = parseInt(hex.substr(5,2), 16);
+          // write to LED characteristic
+          await ledChar.writeValue(Uint8Array.of(r,g,b));
+        });
+
+        // optionally read initial LED color if you want to sync picker:
+        try {
+          const lv = await ledChar.readValue();
+          const r = lv.getUint8(0), g = lv.getUint8(1), b = lv.getUint8(2);
+          const hex = '#' + [r,g,b].map(x=>x.toString(16).padStart(2,'0')).join('');
+          colorPicker.value   = hex;
+          colorValueEl.textContent = hex;
+        } catch {}
+
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = 'Error: ' + err;
+      }
+    });
+  </script>
+</body>
+</html>
