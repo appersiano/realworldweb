@@ -15,7 +15,7 @@
     body {
       background: var(--bg);
       color: var(--fg);
-      font-family: -apple-system, BlinkMacSystemFont, “Segoe UI”, Roboto, Helvetica, Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, “Segoe UI”, Roboto, Helvetica, Arial, sans-serif;
       text-align: center;
       height: 100vh;
       display: flex;
@@ -73,6 +73,7 @@
     let barcodeDetector;
     let stream;
     let scanning = false;
+    let lastPromptedUrl = '';
 
     async function startCamera() {
       stream = await navigator.mediaDevices.getUserMedia({
@@ -81,7 +82,6 @@
       });
       video.srcObject = stream;
       await video.play();
-      // dimensiona canvas
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
     }
@@ -99,17 +99,25 @@
       if (!scanning) return;
       try {
         const barcodes = await barcodeDetector.detect(video);
-        // pulisci overlay
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+
         if (barcodes.length) {
           barcodes.forEach(code => {
             const { x, y, width, height } = code.boundingBox;
-            // disegna riquadro
             ctx.strokeStyle = 'lime';
             ctx.lineWidth = 4;
             ctx.strokeRect(x, y, width, height);
-            // mostra valore
+
             resultEl.textContent = code.rawValue;
+
+            // se è un URL e non è già stato chiesto
+            const urlRegex = /^https?:\/\/[^\s]+$/i;
+            if (urlRegex.test(code.rawValue) && code.rawValue !== lastPromptedUrl) {
+              lastPromptedUrl = code.rawValue;
+              if (confirm(`Hai rilevato un URL:\n\n${code.rawValue}\n\nVuoi aprirlo in un nuovo tab?`)) {
+                window.open(code.rawValue, '_blank', 'noopener');
+              }
+            }
           });
         } else {
           resultEl.textContent = 'Nessun codice rilevato';
