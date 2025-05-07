@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <title>Misura Airtime con Accelerometro</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 2rem;
+      text-align: center;
+    }
+    #status {
+      font-size: 1.25rem;
+      margin-top: 1rem;
+    }
+    #airtime {
+      font-size: 2rem;
+      margin-top: 2rem;
+      color: darkblue;
+    }
+    button {
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>Airtime Tracker</h1>
+  <button id="start">Avvia sensore</button>
+  <div id="status">Premi “Avvia sensore” per iniziare</div>
+  <div id="airtime"></div>
+
+  <script>
+    let sensor, inAir = false, startTime = 0;
+
+    document.getElementById('start').addEventListener('click', async () => {
+      if ('Accelerometer' in window) {
+        try {
+          sensor = new Accelerometer({frequency: 60});
+          sensor.addEventListener('reading', onReading);
+          sensor.addEventListener('error', e => {
+            document.getElementById('status').textContent =
+              `Errore sensore: ${e.error.name}`;
+          });
+          sensor.start();
+          document.getElementById('status').textContent = 'Sensore attivo, attendi il lancio…';
+          document.getElementById('start').disabled = true;
+        } catch (err) {
+          document.getElementById('status').textContent =
+            `Impossibile avviare il sensore: ${err}`;
+        }
+      } else {
+        document.getElementById('status').textContent =
+          'Accelerometer non supportato in questo browser';
+      }
+    });
+
+    function onReading() {
+      // magnitude dell'accelerazione (m/s^2)
+      const x = sensor.x, y = sensor.y, z = sensor.z;
+      const mag = Math.hypot(x, y, z);
+
+      // soglia per caduta libera: < 2 m/s^2
+      if (mag < 2 && !inAir) {
+        inAir = true;
+        startTime = performance.now();
+        document.getElementById('status').textContent = 'In aria…';
+      }
+      if (mag >= 2 && inAir) {
+        inAir = false;
+        const airtime = (performance.now() - startTime) / 1000;
+        document.getElementById('status').textContent = 'Rientrato a terra';
+        document.getElementById('airtime').textContent =
+          `Tempo in aria: ${airtime.toFixed(3)} s`;
+      }
+    }
+  </script>
+</body>
+</html>
